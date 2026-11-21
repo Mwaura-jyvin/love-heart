@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#05010a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>For i love you Alyce</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { color-scheme: dark; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #05010a;
+      overflow: hidden;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      font-family: Outfit, system-ui, sans-serif;
+    }
+    .bg {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background-color: #05010a;
+      pointer-events: none;
+    }
+    .bg::before,
+    .bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: url("photo_2026-11-02_00-03-21.jpg");
+      background-repeat: no-repeat;
+    }
+    .bg::before {
+      background-position: center;
+      background-size: cover;
+      filter: blur(7px);
+      transform: scale(1.04);
+    }
+    .bg::after {
+      background-image:
+        linear-gradient(180deg, rgba(5, 1, 10, 0.08), rgba(5, 1, 10, 0.16) 48%, rgba(5, 1, 10, 0.58)),
+        radial-gradient(ellipse at 50% 35%, transparent 20%, rgba(5, 1, 10, 0.18) 58%, rgba(5, 1, 10, 0.72) 100%),
+        url("photo_2026-11-02_00-03-21.jpg");
+      background-position: center, center, center;
+      background-size: cover, cover, contain;
+    }
+    canvas { display: block; width: 100%; height: 100%; position: relative; }
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 42%, rgba(0, 0, 0, 0.3) 100%);
+    }
+    .grain {
+      position: fixed;
+      inset: -40px;
+      pointer-events: none;
+      opacity: 0.055;
+      mix-blend-mode: overlay;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+  </style>
+</head>
+<body>
+  <div class="bg"></div>
+  <canvas id="stage"></canvas>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+  <script>
+  (() => {
+    // ============================ PERSONALISE ============================
+    const NAME = "i love you Alyce";
+    const SIGNATURE = "My Ukambani Princess";
+    const PERSONAL = [
+      "You are my home",
+      "My favourite person",
+      "Always yours",
+      "Still choosing you",
+      "Thank you",
+      "My Ukambani Princess",
+    ];
+    const SEED = 11;
+    // =====================================================================
+
+    const SC = 20, OY = 14;
+    const TICK = 16;
+    const ANIM = 52;
+    const INNER_K = 0.58;
+    const BAND_PAD = 13;
+    const SIZES = [11, 12, 13, 14];
+    const INNER_SIZES = [10, 11, 12];
+    const OUT_FRAMES = 160;
+    const BAND_START = 40, BAND_FRAMES = 400;
+    const INNER_START = 380, INNER_FRAMES = 190;
+    const NAME_START = INNER_START + INNER_FRAMES + 8;
+    const SIG_START = NAME_START + 72;
+    const ALL_IN = SIG_START + 80;
+    const BEAT = 96;
+
+    const OUTER_TEXTS = [
+      "I love you", "You are my forever", "Forever yours", "My heart is yours",
+      "You make my world glow", "Stay with me always", "Every beat for you",
+      "You are my moonlight", "My favorite place is you", "You are my dream",
+      "You are my home", "I choose you every day", "With you, everything feels right",
+      "You are my sweetest miracle", "Everyday I fall for you again",
+      "My heart beats for you", "You are my everything", "You are my light",
+      "My love for you is endless", "My Ukambani Princess", "You are my calm",
+      "My Princess", "You complete me", "My soul finds home in you",
+      "You make life sweeter", "You are my wildest dream", "Love you endlessly",
+    ];
+    const SHORT_TEXTS = [
+      "I love you", "Forever yours", "My heart is yours", "You are my home",
+      "You are my forever", "I adore you", "My Ukambani Princess", "You make my world glow",
+      "My love for you is endless", "Love you endlessly",
+    ];
+    const HEART_EMOJIS = ["❤", "♥", "♡"];
+
+    const WINE = [0.52, 0.02, 0.10], CRIMSON = [0.90, 0.08, 0.18], BLOOD = [0.98, 0.16, 0.22];
+    const GOLD = [0.82, 0.62, 0.28], GOLD_HI = [1.0, 0.88, 0.58], IVORY = [1.0, 0.95, 0.82];
+    const FLASH_RED = [1.0, 0.80, 0.82], FLASH_GOLD = [1.0, 0.96, 0.84];
+    const BGC = [5 / 255, 1 / 255, 10 / 255];
+
+    const canvas = document.getElementById("stage");
+    const ctx = canvas.getContext("2d", { alpha: true });
+    const measureCtx = document.createElement("canvas").getContext("2d");
+    document.title = "For " + NAME;
+
+    const clamp = v => Math.max(0, Math.min(1, v));
+    const smooth = u => { u = clamp(u); return u * u * (3 - 2 * u); };
+    const mix = (a, b, k) => a.map((p, i) => p + (b[i] - p) * k);
+    const dim = (c, k) => c.map(v => v * k);
+    const hx = c => "#" + c.map(v => Math.round(clamp(v) * 255).toString(16).padStart(2, "0")).join("");
+    const hxa = (c, a) => `rgba(${c.map(v => Math.round(clamp(v) * 255)).join(",")},${clamp(a)})`;
+    const easeOut = u => 1 - (1 - clamp(u)) ** 3;
+    const easeOutBack = u => {
+      u = clamp(u);
+      const c1 = 1.12, c3 = c1 + 1;
+      return 1 + c3 * (u - 1) ** 3 + c1 * (u - 1) ** 2;
+    };
+
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    class Rng {
+      constructor(seed) { this.n = mulberry32(seed); }
+      random() { return this.n(); }
+      uniform(a, b) { return a + (b - a) * this.n(); }
+      randint(a, b) { return a + Math.floor(this.n() * (b - a + 1)); }
+      choice(arr) { return arr[Math.floor(this.n() * arr.length)]; }
+      shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(this.n() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+    }
+
+    function heart(a) {
+      const x = 16 * Math.pow(Math.sin(a), 3);
+      const y = (13 * Math.cos(a) - 5 * Math.cos(2 * a)
+        - 2 * Math.cos(3 * a) - Math.cos(4 * a));
+      return [x * SC, y * SC + OY];
+    }
+
+    const POLY = Array.from({ length: 720 }, (_, i) => heart(2 * Math.PI * i / 720));
+    const YMAX = Math.max(...POLY.map(p => p[1]));
+    const YMIN = Math.min(...POLY.map(p => p[1]));
+    const CY = (YMAX + YMIN) / 2;
+    const scalePt = (x, y, k) => [x * k, CY + (y - CY) * k];
+    const IPOLY = POLY.map(([x, y]) => scalePt(x, y, INNER_K));
+    const edgesOf = poly => poly.map((p, i) => [p, poly[(i + 1) % poly.length]]);
+    const EDGES = edgesOf(POLY), IEDGES = edgesOf(IPOLY);
+    const CONTENT_W = 32 * SC * 1.04;
+    const CONTENT_H = (YMAX - YMIN) + 108;
+
+    function spans(y, edges) {
+      const xs = [];
+      for (const [[x1, y1], [x2, y2]] of edges) {
+        if ((y1 <= y && y < y2) || (y2 <= y && y < y1)) {
+          xs.push(x1 + (y - y1) * (x2 - x1) / (y2 - y1));
+        }
+      }
+      xs.sort((a, b) => a - b);
+      const out = [];
+      for (let i = 0; i + 1 < xs.length; i += 2) out.push([xs[i], xs[i + 1]]);
+      return out;
+    }
+    function intersect(A, B, minLen) {
+      const out = [];
+      for (const a of A) for (const b of B) {
+        const lo = Math.max(a[0], b[0]), hi = Math.min(a[1], b[1]);
+        if (hi - lo > minLen) out.push([lo, hi]);
+      }
+      return out;
+    }
+    function cut(seg, a, b, minLen) {
+      const [lo, hi] = seg, out = [];
+      if (lo < a) out.push([lo, Math.min(hi, a)]);
+      if (hi > b) out.push([Math.max(lo, b), hi]);
+      return out.filter(s => s[1] - s[0] > minLen);
+    }
+
+    const radial = (x, y) => Math.hypot(x / (16 * SC), (y - CY) / (14.5 * SC));
+    const beatAmp = age => Math.exp(-(((age - 3.5) / 5.2) ** 2)) + 0.55 * Math.exp(-(((age - 22) / 6.2) ** 2));
+
+    const SANS = "Outfit, Arial, sans-serif";
+    const SERIF = "'Cormorant Garamond', Georgia, serif";
+    function fontStr(family, size, style) {
+      const italic = style === "italic" ? "italic " : "";
+      const bold = style === "bold" ? "700 " : "500 ";
+      return `${italic}${bold}${size}px ${family}`;
+    }
+    function measure(family, size, style, text) {
+      measureCtx.font = fontStr(family, size, style);
+      return measureCtx.measureText(text).width;
+    }
+    function lineSpace(size) { return size * 1.32; }
+
+    let viewScale = 1, dpr = 1, isPhone = false;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2.25);
+      const w = window.innerWidth, h = window.innerHeight;
+      isPhone = Math.min(w, h) < 720;
+      canvas.width = Math.max(1, Math.floor(w * dpr));
+      canvas.height = Math.max(1, Math.floor(h * dpr));
+      const fill = isPhone ? 0.98 : 0.96;
+      viewScale = Math.min(w / CONTENT_W, h / CONTENT_H) * fill;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function applyView(pulse) {
+      const beat = 1 + pulse * 0.034;
+      ctx.setTransform(
+        dpr * viewScale * beat, 0, 0, dpr * viewScale * beat,
+        canvas.width / 2, canvas.height / 2 - 8 * dpr * viewScale
+      );
+    }
+
+    const scene = {
+      rng: new Rng(SEED),
+      templates: [],
+      frame: 0, items: [], nextI: 0,
+      flying: [], landed: [], rings: [],
+      glow: [], embers: [], hearts: [], sparkles: [], comets: [],
+      orbiters: [], motes: [], trail: [],
+      nameSize: 34, nameHw: 80, nameHh: 20, nameCy: CY + 6,
+      acc: 0, outlineP: 0, showHeads: true,
+    };
+
+    function measureName() {
+      const limit = 32 * SC * INNER_K * 0.5;
+      let size = 36;
+      while (measure(SERIF, size, "italic", NAME) > limit && size > 16) size -= 1;
+      scene.nameSize = size;
+      scene.nameHw = measure(SERIF, size, "italic", NAME) / 2 + 18;
+      scene.nameHh = lineSpace(size) / 2 + 8;
+      scene.nameCy = CY + 8;
+    }
+
+    function* cycle(rng, texts) {
+      while (true) {
+        const order = rng.shuffle(texts.slice());
+        for (const t of order) yield t;
+      }
+    }
+
+    function fill(rng, segsFn, family, style, sizes, texts, rowExtra, pad) {
+      const gen = cycle(rng, texts);
+      const rowH = Math.max(...sizes.map(z => lineSpace(z))) + rowExtra;
+      const half = rowH / 2;
+      const placed = [];
+      for (let y = YMAX - half; y > YMIN + half; y -= rowH) {
+        for (let [lo, hi] of segsFn(y, half)) {
+          lo += pad; hi -= pad;
+          let cur = lo + rng.uniform(0, 6);
+          const line = [];
+          while (true) {
+            let fit = null;
+            for (let n = 0; n < 10; n++) {
+              const text = gen.next().value;
+              const size = rng.choice(sizes);
+              const w = measure(family, size, style, text);
+              if (cur + w <= hi) { fit = [text, size, w]; break; }
+            }
+            if (!fit) break;
+            const [text, size, w] = fit;
+            line.push([cur + w / 2, text, size, w]);
+            cur += w + 8;
+          }
+          if (!line.length) continue;
+          if (line.length > 1) {
+            const left = hi - (line[line.length - 1][0] + line[line.length - 1][3] / 2);
+            line.forEach((it, i) => { it[0] += left * i / (line.length - 1); });
+          } else line[0][0] = (lo + hi) / 2;
+          line.forEach(([x, text, size], i) => {
+            placed.push({ x, y, text, size, edge: i === 0 || i === line.length - 1 });
+          });
+        }
+      }
+      return placed;
+    }
+
+    function layout() {
+      const rng = scene.rng;
+      measureName();
+      const bandSegs = (y, half) => {
+        let segs = intersect(spans(y + half, EDGES), spans(y - half, EDGES), 14);
+        for (const yy of [y + half, y, y - half]) {
+          for (const [a, b] of spans(yy, IEDGES)) {
+            segs = segs.flatMap(s => cut(s, a - BAND_PAD, b + BAND_PAD, 24));
+          }
+        }
+        return segs;
+      };
+      const innerSegs = (y, half) => {
+        let segs = intersect(spans(y + half, IEDGES), spans(y - half, IEDGES), 24);
+        if (Math.abs(y - scene.nameCy) < scene.nameHh + half) {
+          segs = segs.flatMap(s => cut(s, -scene.nameHw, scene.nameHw, 24));
+        }
+        return segs;
+      };
+
+      const band = fill(rng, bandSegs, SANS, "bold", SIZES, OUTER_TEXTS, 1, 3);
+      const inner = fill(rng, innerSegs, SERIF, "italic", INNER_SIZES,
+        PERSONAL.concat(PERSONAL, PERSONAL, SHORT_TEXTS), 3, 5);
+      const out = [];
+
+      for (const p of band) {
+        const rad = Math.min(1, radial(p.x, p.y));
+        let c = mix(WINE, CRIMSON, 0.3 + 0.7 * rad);
+        c = mix(c, BLOOD, rng.uniform(0, 0.32) + (p.edge ? 0.28 : 0));
+        Object.assign(p, {
+          color: c.map(v => Math.min(1, v)), rad, mode: "out",
+          family: SANS, style: "bold", flashc: FLASH_RED, kind: "word",
+          ang: Math.atan2(p.x, p.y - CY) % (2 * Math.PI), phase: rng.uniform(0, 6.28),
+        });
+      }
+      band.sort((a, b) => a.ang - b.ang);
+      band.forEach((p, k) => { p.start = BAND_START + BAND_FRAMES * k / band.length; });
+      out.push(...band);
+
+      for (const p of inner) {
+        const v = clamp((p.y - (CY - 150)) / 300);
+        let c = mix(GOLD, GOLD_HI, v);
+        if (PERSONAL.includes(p.text)) c = mix(c, IVORY, 0.5);
+        Object.assign(p, {
+          color: c, rad: Math.min(1, radial(p.x, p.y)), mode: "in",
+          family: SERIF, style: "italic", flashc: FLASH_GOLD, kind: "word",
+          phase: rng.uniform(0, 6.28),
+        });
+      }
+      inner.sort((a, b) => a.rad - b.rad);
+      inner.forEach((p, k) => { p.start = INNER_START + INNER_FRAMES * k / Math.max(1, inner.length); });
+      out.push(...inner);
+
+      out.push({
+        x: 0, y: scene.nameCy, text: NAME, size: scene.nameSize,
+        family: SERIF, style: "italic", color: IVORY, rad: 0,
+        mode: "rise", flashc: FLASH_GOLD, kind: "name", start: NAME_START, phase: 0,
+      });
+      if (SIGNATURE) {
+        out.push({
+          x: 0, y: scene.nameCy - scene.nameHh - 6, text: SIGNATURE, size: 20,
+          family: SERIF, style: "italic", color: mix(IVORY, GOLD, 0.4),
+          rad: 0, mode: "rise", flashc: FLASH_GOLD, kind: "sig", start: SIG_START, phase: 1,
+        });
+      }
+      out.sort((a, b) => a.start - b.start);
+      scene.templates = out;
+    }
+
+    function polyPath(poly, step, k = 1) {
+      const path = new Path2D();
+      let started = false;
+      poly.forEach(([x, y], i) => {
+        if (i % step) return;
+        const [px, py] = scalePt(x, y, k);
+        if (started) path.lineTo(px, -py);
+        else { path.moveTo(px, -py); started = true; }
+      });
+      path.closePath();
+      return path;
+    }
+
+    function respawnEmber(e, initial) {
+      const rng = scene.rng;
+      for (let i = 0; i < 60; i++) {
+        const y = rng.uniform(YMIN, YMAX);
+        const segs = spans(y, EDGES);
+        if (segs.length) {
+          const [lo, hi] = rng.choice(segs);
+          e.x = rng.uniform(lo, hi); e.y = y; break;
+        }
+      }
+      e.life = rng.randint(160, 320);
+      e.age = initial ? rng.randint(0, e.life) : 0;
+      e.vy = rng.uniform(0.28, 0.75);
+      e.ph = rng.uniform(0, 6.28);
+      e.r = rng.uniform(0.8, 2.0);
+      e.gold = rng.random() < 0.62;
+    }
+    function respawnHeart(p, initial) {
+      const rng = scene.rng;
+      p.cx = rng.uniform(-150, 150);
+      p.cy = rng.uniform(-130, 130);
+      p.rad = rng.uniform(80, 210);
+      p.phase = rng.uniform(0, 2 * Math.PI);
+      p.speed = rng.uniform(0.45, 1.15);
+      p.size = rng.uniform(10, 18);
+      p.color = rng.choice([GOLD_HI, FLASH_RED, IVORY, CRIMSON, GOLD]);
+      p.drift = rng.uniform(0.5, 1.4);
+      p.twist = rng.uniform(0.7, 1.3);
+      p.wave = rng.uniform(12, 30);
+      p.emoji = rng.choice(HEART_EMOJIS);
+      p.alpha = initial ? rng.uniform(0.25, 0.7) : rng.uniform(0.2, 0.8);
+    }
+    function respawnSparkle(s, initial) {
+      const rng = scene.rng;
+      s.x = rng.uniform(-240, 240);
+      s.y = rng.uniform(-220, 180);
+      s.r = rng.uniform(1.2, 3.6);
+      s.speed = rng.uniform(0.35, 1.1);
+      s.phase = rng.uniform(0, 2 * Math.PI);
+      s.color = rng.choice([GOLD_HI, IVORY, FLASH_RED, CRIMSON]);
+      s.alpha = initial ? rng.uniform(0.25, 0.75) : rng.uniform(0.2, 0.85);
+      s.star = rng.random() < 0.45;
+    }
+    function respawnComet(c) {
+      const rng = scene.rng;
+      c.x = rng.uniform(-280, 280);
+      c.y = rng.uniform(-260, 260);
+      c.vx = rng.uniform(-0.9, 0.9);
+      c.vy = rng.uniform(-0.9, 0.9);
+      c.r = rng.uniform(2.2, 5.2);
+      c.color = rng.choice([GOLD_HI, FLASH_RED, GOLD, IVORY]);
+      c.hist = [];
+    }
+    function respawnMote(m) {
+      const rng = scene.rng;
+      m.a = rng.uniform(0, Math.PI * 2);
+      m.k = rng.uniform(1.02, 1.18);
+      m.speed = rng.uniform(0.004, 0.01) * (rng.random() < 0.5 ? 1 : -1);
+      m.r = rng.uniform(1.1, 2.4);
+      m.color = rng.choice([GOLD_HI, GOLD, IVORY, CRIMSON]);
+      m.alpha = rng.uniform(0.35, 0.85);
+    }
+
+    function buildScene() {
+      scene.rng = new Rng(SEED);
+      layout();
+      scene.frame = 0;
+      scene.items = scene.templates.map(p => ({ ...p }));
+      scene.nextI = 0;
+      scene.flying = [];
+      scene.landed = [];
+      scene.rings = [];
+      scene.trail = [];
+      scene.glow = [[1.28, 0.018], [1.18, 0.03], [1.10, 0.048], [1.05, 0.07], [1.02, 0.1]]
+        .map(([k, s]) => ({ path: polyPath(POLY, 2, k), s }));
+      scene.outerPath = polyPath(POLY, 1, 1);
+      scene.innerPath = polyPath(IPOLY, 1, 1);
+      const nEmber = isPhone ? 22 : 34;
+      const nHeart = isPhone ? 12 : 18;
+      const nSpark = isPhone ? 28 : 48;
+      scene.embers = Array.from({ length: nEmber }, () => { const e = {}; respawnEmber(e, true); return e; });
+      scene.hearts = Array.from({ length: nHeart }, () => { const p = {}; respawnHeart(p, true); return p; });
+      scene.sparkles = Array.from({ length: nSpark }, () => { const s = {}; respawnSparkle(s, true); return s; });
+      scene.comets = Array.from({ length: isPhone ? 5 : 8 }, () => { const c = {}; respawnComet(c); return c; });
+      scene.orbiters = Array.from({ length: 6 }, (_, i) => ({ t: i / 6, speed: 0.0022 + i * 0.00025, gold: i % 2 === 0 }));
+      scene.motes = Array.from({ length: isPhone ? 16 : 26 }, () => { const m = {}; respawnMote(m); return m; });
+      scene.outlineP = 0;
+      scene.showHeads = true;
+    }
+
+    function spawn(it) {
+      const rng = scene.rng;
+      const tx = it.x, ty = -it.y;
+      if (it.mode === "out") {
+        const a = rng.uniform(0, 2 * Math.PI), rr = rng.uniform(480, 640);
+        it.sx = rr * Math.cos(a); it.sy = rr * Math.sin(a); it.curve = rng.uniform(-90, 90);
+      } else if (it.mode === "in") {
+        it.sx = 0; it.sy = -CY; it.curve = rng.uniform(-36, 36);
+      } else {
+        it.sx = tx; it.sy = ty + 22; it.curve = 0;
+      }
+      const dx = tx - it.sx, dy = ty - it.sy;
+      const d = Math.hypot(dx, dy) || 1;
+      it.nx = -dy / d; it.ny = dx / d; it.f = 0;
+      it.dur = it.kind === "word" ? ANIM : 78;
+      it.flash = 0; it.px = it.sx; it.py = it.sy; it.u = 0; it.ease = 0; it.sc = 0.7;
+      scene.flying.push(it);
+    }
+
+    function fly(it) {
+      it.f += 1;
+      const u = clamp(it.f / it.dur);
+      it.u = u;
+      const e = it.kind === "word" ? easeOutBack(u) : easeOut(u);
+      const tx = it.x, ty = -it.y;
+      const bend = it.curve * Math.sin(Math.PI * Math.min(1, u));
+      it.px = it.sx + (tx - it.sx) * e + it.nx * bend;
+      it.py = it.sy + (ty - it.sy) * e + it.ny * bend;
+      it.ease = clamp(e);
+      it.sc = 0.72 + 0.28 * easeOut(u);
+      if (u >= 1) {
+        it.px = tx; it.py = ty; it.ease = 1; it.sc = 1;
+        if (it.kind === "name") scene.rings.push({ f: 0 }, { f: -14 }, { f: -28 });
+        return false;
+      }
+      return true;
+    }
+
+    function outlinePts(a0, a1, n, k = 1.035) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const [x, y] = heart(a0 + (a1 - a0) * i / n);
+        const [px, py] = scalePt(x, y, k);
+        pts.push([px, -py]);
+      }
+      return pts;
+    }
+
+    function strokeSmooth(pts, width, color) {
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    function drawText(it, flying, pulse) {
+      const c = it.color;
+      const floatY = flying ? 0 : Math.sin(scene.frame * 0.045 + it.phase) * 1.15;
+      const x = it.px, y = it.py + floatY;
+      let main, halo, shadow;
+      if (flying) {
+        const e = it.ease;
+        const flash = 0.8 * Math.sin(Math.PI * clamp((it.u - 0.5) / 0.5));
+        shadow = hxa(dim(c, 0.25), e * 0.7);
+        halo = hxa(c, e * e * 0.28);
+        main = hx(mix(mix(BGC, c, e ** 1.35), it.flashc, flash));
+      } else {
+        main = it.last;
+        halo = hxa(it.flashc, 0.12 + 0.18 * pulse);
+        shadow = hxa(dim(c, 0.2), 0.65);
+      }
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(it.sc || 1, it.sc || 1);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = fontStr(it.family, it.size, it.style);
+      ctx.fillStyle = shadow;
+      ctx.fillText(it.text, 1.6, 2.2);
+      if (it.kind === "name") {
+        ctx.shadowColor = hxa(GOLD_HI, 0.55 + 0.35 * pulse);
+        ctx.shadowBlur = 18 + 10 * pulse;
+      }
+      ctx.fillStyle = halo;
+      ctx.fillText(it.text, 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = main;
+      ctx.fillText(it.text, 0, 0);
+      ctx.restore();
+    }
+
+    function drawStar(x, y, r) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r * 0.22, y - r * 0.22);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x + r * 0.22, y + r * 0.22);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r * 0.22, y + r * 0.22);
+      ctx.lineTo(x - r, y);
+      ctx.lineTo(x - r * 0.22, y - r * 0.22);
+      ctx.closePath();
+    }
+
+    function render() {
+      const f = ++scene.frame;
+      const rng = scene.rng;
+      const started = f >= ALL_IN;
+      const age = started ? (f - ALL_IN) % BEAT : 0;
+      const pulse = started ? beatAmp(age) : 0;
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      applyView(pulse);
+
+      const gi = smooth((f - 18) / 140);
+      for (const g of scene.glow) {
+        ctx.fillStyle = hxa(mix(WINE, CRIMSON, 0.55), g.s * gi * (1.1 + 1.4 * pulse));
+        ctx.fill(g.path);
+      }
+
+      ctx.save();
+      ctx.clip(scene.outerPath);
+      const fillA = 0.08 * gi * (0.85 + 0.4 * pulse);
+      const rg = ctx.createRadialGradient(0, -CY + 40, 20, 0, -CY, 280);
+      rg.addColorStop(0, hxa(mix(CRIMSON, GOLD, 0.2), fillA * 1.3));
+      rg.addColorStop(0.55, hxa(WINE, fillA));
+      rg.addColorStop(1, hxa(BGC, 0));
+      ctx.fillStyle = rg;
+      ctx.fillRect(-400, -450, 800, 900);
+      ctx.restore();
+
+      const innerBloom = smooth((f - INNER_START + 20) / 90);
+      if (innerBloom > 0) {
+        ctx.save();
+        ctx.clip(scene.innerPath);
+        const ig = ctx.createRadialGradient(0, -scene.nameCy, 8, 0, -CY, 150);
+        ig.addColorStop(0, hxa(IVORY, 0.16 * innerBloom * (0.8 + pulse)));
+        ig.addColorStop(0.45, hxa(GOLD, 0.10 * innerBloom));
+        ig.addColorStop(1, hxa(GOLD, 0));
+        ctx.fillStyle = ig;
+        ctx.fillRect(-220, -280, 440, 560);
+        ctx.restore();
+      }
+
+      if (f <= OUT_FRAMES + 1) scene.outlineP = Math.max(smooth(f / OUT_FRAMES), 0.008);
+      if (f === OUT_FRAMES + 2) scene.showHeads = false;
+      const p = scene.outlineP;
+      const n = Math.max(2, Math.floor(180 * p));
+      const right = outlinePts(Math.PI, Math.PI - Math.PI * p, n);
+      const left = outlinePts(Math.PI, Math.PI + Math.PI * p, n);
+      const lineGlow = hxa(GOLD, 0.22 + 0.25 * pulse);
+      const lineC = hx(mix(BGC, mix(GOLD, GOLD_HI, 0.45 + 0.4 * pulse), smooth(f / 28)));
+      ctx.save();
+      ctx.shadowColor = lineGlow;
+      ctx.shadowBlur = 16 + 10 * pulse;
+      strokeSmooth(right, 2.4, lineC);
+      strokeSmooth(left, 2.4, lineC);
+      ctx.restore();
+      strokeSmooth(right, 1.15, hxa(IVORY, 0.55 + 0.3 * pulse));
+      strokeSmooth(left, 1.15, hxa(IVORY, 0.55 + 0.3 * pulse));
+
+      if (scene.showHeads) {
+        for (const pts of [right, left]) {
+          const [x, y] = pts[pts.length - 1];
+          scene.trail.push({ x, y, life: 18 });
+          ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2);
+          ctx.fillStyle = hxa(GOLD, 0.28); ctx.fill();
+          ctx.beginPath(); ctx.arc(x, y, 3.4, 0, Math.PI * 2);
+          ctx.fillStyle = hx(mix(GOLD_HI, IVORY, 0.75)); ctx.fill();
+        }
+      }
+      for (let i = scene.trail.length - 1; i >= 0; i--) {
+        const t = scene.trail[i];
+        t.life -= 1;
+        if (t.life <= 0) { scene.trail.splice(i, 1); continue; }
+        ctx.beginPath(); ctx.arc(t.x, t.y, 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = hxa(GOLD_HI, t.life / 22); ctx.fill();
+      }
+
+      ctx.lineWidth = 1.35;
+      ctx.strokeStyle = hxa(GOLD_HI, (0.35 + 0.4 * pulse) * smooth((f - INNER_START + 24) / 50));
+      ctx.shadowColor = hxa(GOLD, 0.35);
+      ctx.shadowBlur = 8;
+      ctx.stroke(scene.innerPath);
+      ctx.shadowBlur = 0;
+
+      if (f > OUT_FRAMES) {
+        for (const o of scene.orbiters) {
+          o.t = (o.t + o.speed) % 1;
+          const [hx_, hy] = heart(o.t * Math.PI * 2);
+          const [px, py] = scalePt(hx_, hy, 1.035);
+          ctx.beginPath(); ctx.arc(px, -py, o.gold ? 2.6 : 2.0, 0, Math.PI * 2);
+          ctx.fillStyle = hxa(o.gold ? GOLD_HI : CRIMSON, 0.75 + 0.2 * pulse);
+          ctx.fill();
+        }
+      }
+
+      while (scene.nextI < scene.items.length && scene.items[scene.nextI].start <= f) {
+        spawn(scene.items[scene.nextI]);
+        scene.nextI += 1;
+      }
+      const still = [];
+      for (const it of scene.flying) (fly(it) ? still : scene.landed).push(it);
+      scene.flying = still;
+
+      const lum = 0.92 + 0.08 * Math.sin(f * 0.04) + 0.1 * pulse;
+      const rip = [];
+      if (started) {
+        for (const [off, amp] of [[0, 0.7], [18, 0.4]]) {
+          const a = age - off;
+          if (a >= 0 && a < 58) rip.push([a / 46, amp * (1 - a / 58)]);
+        }
+      }
+      if (scene.landed.length && rng.random() < 0.38) rng.choice(scene.landed).flash = 0.85;
+      for (const it of scene.landed) {
+        let g = 0;
+        for (const [rr, amp] of rip) g = Math.max(g, amp * Math.exp(-(((it.rad - rr) / 0.12) ** 2)));
+        const fl = it.flash;
+        it.flash = fl > 0.02 ? fl * 0.88 : 0;
+        it.last = hx(mix(dim(it.color, lum), it.flashc, Math.max(g, it.flash)));
+        it.px = it.x; it.py = -it.y; it.sc = 1;
+        drawText(it, false, pulse);
+      }
+      for (const it of scene.flying) drawText(it, true, pulse);
+
+      const nameIt = scene.landed.find(it => it.kind === "name");
+      if (nameIt) {
+        ctx.save();
+        ctx.strokeStyle = hxa(GOLD_HI, 0.45 + 0.35 * pulse);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-26, -nameIt.y + 18);
+        ctx.quadraticCurveTo(0, -nameIt.y + 24, 26, -nameIt.y + 18);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (let i = scene.rings.length - 1; i >= 0; i--) {
+        const rgR = scene.rings[i];
+        rgR.f += 1;
+        if (rgR.f <= 0) continue;
+        const u = rgR.f / 78;
+        if (u >= 1) { scene.rings.splice(i, 1); continue; }
+        const rad = 16 + 460 * (1 - (1 - u) ** 2);
+        ctx.beginPath();
+        ctx.ellipse(0, -CY, rad, rad * 0.9, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = hxa(GOLD_HI, 0.85 * (1 - u) ** 1.45);
+        ctx.lineWidth = 2.2 * (1 - u);
+        ctx.stroke();
+      }
+
+      ctx.globalCompositeOperation = "lighter";
+      const ei = smooth((f - INNER_START) / 110);
+      for (const e of scene.embers) {
+        e.age += 1;
+        if (e.age >= e.life) respawnEmber(e, false);
+        const a = Math.sin(Math.PI * e.age / e.life) ** 2;
+        const tw = 0.55 + 0.45 * Math.sin(e.age * 0.22 + e.ph);
+        const x = e.x + 6 * Math.sin(e.age * 0.035 + e.ph);
+        const y = -(e.y + e.vy * e.age * 0.55);
+        ctx.beginPath(); ctx.arc(x, y, e.r * (1 + 0.3 * pulse), 0, Math.PI * 2);
+        ctx.fillStyle = hxa(e.gold ? GOLD_HI : BLOOD, 0.75 * a * tw * ei);
+        ctx.fill();
+      }
+
+      for (const pht of scene.hearts) {
+        const t = f * 0.038 * pht.speed + pht.phase;
+        const x = pht.cx + Math.cos(t * pht.twist) * pht.rad * 0.55;
+        const y = -(pht.cy + Math.sin(t * pht.drift) * pht.wave);
+        const alpha = clamp(0.22 + 0.55 * Math.sin(t * 2 + pht.phase));
+        const size = Math.max(9, pht.size * (0.88 + 0.28 * Math.sin(t * 2.4)));
+        ctx.font = `600 ${size}px ${SANS}`;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = hxa(pht.color, alpha * 0.85);
+        ctx.fillText(pht.emoji, x, y);
+        if (Math.abs(x) > 320 || Math.abs(y) > 320) respawnHeart(pht, false);
+      }
+
+      for (const s of scene.sparkles) {
+        const wave = f * 0.05 * s.speed + s.phase;
+        const sx = s.x + Math.cos(wave) * 16;
+        const sy = s.y + Math.sin(wave * 1.5) * 12 - ((f * 0.12 * s.speed) % 420) + 180;
+        const rr = s.r * (1 + 0.55 * Math.sin(wave * 2.6));
+        ctx.fillStyle = hxa(s.color, 0.55 * s.alpha * (0.5 + 0.5 * Math.sin(wave * 3)));
+        if (s.star) { drawStar(sx, sy, rr * 1.6); ctx.fill(); }
+        else { ctx.beginPath(); ctx.arc(sx, sy, rr, 0, Math.PI * 2); ctx.fill(); }
+      }
+
+      for (const m of scene.motes) {
+        m.a += m.speed;
+        const [hx_, hy] = heart(m.a);
+        const [px, py] = scalePt(hx_, hy, m.k);
+        ctx.beginPath(); ctx.arc(px, -py, m.r, 0, Math.PI * 2);
+        ctx.fillStyle = hxa(m.color, m.alpha * (0.4 + 0.6 * gi));
+        ctx.fill();
+      }
+
+      for (const c of scene.comets) {
+        c.x += c.vx * 2.1 + 0.7 * Math.sin(f * 0.035 + c.y);
+        c.y += c.vy * 2.1 + 0.7 * Math.cos(f * 0.04 + c.x);
+        if (Math.abs(c.x) > 340 || Math.abs(c.y) > 340) respawnComet(c);
+        c.hist.push([c.x, c.y]);
+        if (c.hist.length > 10) c.hist.shift();
+        if (c.hist.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(c.hist[0][0], c.hist[0][1]);
+          for (let i = 1; i < c.hist.length; i++) ctx.lineTo(c.hist[i][0], c.hist[i][1]);
+          ctx.strokeStyle = hxa(c.color, 0.45);
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+        ctx.fillStyle = hxa(c.color, 0.9);
+        ctx.fill();
+      }
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = Math.min(40, now - last);
+      last = now;
+      scene.acc += dt;
+      while (scene.acc >= TICK) {
+        scene.acc -= TICK;
+        render();
+      }
+      requestAnimationFrame(loop);
+    }
+
+    function replay() { buildScene(); }
+    canvas.addEventListener("click", replay);
+    canvas.addEventListener("touchend", (e) => { e.preventDefault(); replay(); }, { passive: false });
+
+    const start = () => { buildScene(); requestAnimationFrame(loop); };
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+    else start();
+  })();
+  </script>
+</body>
+</html>
